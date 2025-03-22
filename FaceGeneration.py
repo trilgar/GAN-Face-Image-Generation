@@ -12,8 +12,9 @@ from utils import CelebADataset, Generator, Discriminator
 
 # Параметри
 batch_size = 128
-num_epochs = 25
-lr = 2e-3
+num_epochs = 20
+lr_g = 1e-3
+lr_d = 1e-3
 beta1 = 0.5
 PRINT_EVERY_EPOCH = 1
 
@@ -36,9 +37,9 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    dataset = CelebADataset(root_dir=data_path, transform=transform)
+    dataset = CelebADataset(root_dir=data_path, transform=transform, max_images=10000)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True,
-                            pin_memory_device="cuda", prefetch_factor=4)
+                            pin_memory_device="cuda", prefetch_factor=4, persistent_workers=True)
 
 
     # Ініціалізація ваг

@@ -8,13 +8,14 @@ from tqdm import tqdm
 
 # Датасет
 class CelebADataset(Dataset):
-    def __init__(self, root_dir, transform=None, cache_in_memory=False):
+    def __init__(self, root_dir, transform=None, cache_in_memory=False, max_images=None):
         self.root_dir = root_dir
         self.image_files = [os.path.join(root_dir, f)
                             for f in os.listdir(root_dir)
                             if f.lower().endswith(('.jpg', '.png'))]
         self.transform = transform
         self.cache_in_memory = cache_in_memory
+        self.max_images = max_images
 
         # Якщо cache_in_memory встановлено, завантажуємо всі зображення в RAM
         if self.cache_in_memory:
@@ -28,7 +29,10 @@ class CelebADataset(Dataset):
             print("Caching complete.")
 
     def __len__(self):
-        return len(self.image_files)
+        if self.max_images:
+            return self.max_images
+        else:
+            return len(self.image_files)
 
     def __getitem__(self, idx):
         if self.cache_in_memory:
@@ -82,32 +86,21 @@ class Generator(nn.Module):
         return x
 
 
-# Дискримінатор
 class Discriminator(nn.Module):
     def __init__(self, nc, ndf):
         super(Discriminator, self).__init__()
-        self.main = nn.Sequential(
-            # Вхід: (nc, 218, 178)
+        self.conv = nn.Sequential(
+            # Перший (і єдиний) згортковий блок: зменшує розміри зображення
             nn.Conv2d(nc, ndf, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ndf, 109, 89)
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(ndf, ndf * 2, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ndf*2, ~55, ~45)
-            nn.BatchNorm2d(ndf * 2),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(ndf * 2, ndf * 4, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ndf*4, ~27, ~23)
-            nn.BatchNorm2d(ndf * 4),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            nn.Conv2d(ndf * 4, ndf * 8, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ndf*8, ~13, ~12)
-            nn.BatchNorm2d(ndf * 8),
-            nn.LeakyReLU(0.2, inplace=True),
-
-            # Остання згортка, яка зводить просторовий розмір до 1x1
-            nn.Conv2d(ndf * 8, 1, kernel_size=(13, 11), stride=1, padding=0, bias=False),
+            nn.LeakyReLU(0.05, inplace=True)
+        )
+        # Фінальний шар: ядро охоплює повну просторову розмірність після першого шару (109,89)
+        self.final = nn.Sequential(
+            nn.Conv2d(ndf, 1, kernel_size=(109, 89), stride=1, padding=0, bias=False),
             nn.Sigmoid()
         )
 
     def forward(self, input):
-        output = self.main(input)
-        return output.view(input.size(0))
+        x = self.conv(input)  # x має форму: (batch_size, ndf, 109, 89)
+        output = self.final(x)  # фінальна згортка зводить просторовий розмір до 1x1
+        return output.view(input.size(0))  # повертаємо тензор розміру (batch_size,)
