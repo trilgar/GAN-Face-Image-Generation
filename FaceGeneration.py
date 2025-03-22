@@ -59,8 +59,8 @@ if __name__ == "__main__":
     discriminator.apply(weights_init)
 
     criterion = nn.BCELoss()
-    optimizerD = optim.Adam(discriminator.parameters(), lr=lr, betas=(beta1, 0.999))
-    optimizerG = optim.Adam(generator.parameters(), lr=lr, betas=(beta1, 0.999))
+    optimizerD = optim.Adam(discriminator.parameters(), lr=lr_d, betas=(beta1, 0.999))
+    optimizerG = optim.Adam(generator.parameters(), lr=lr_g, betas=(beta1, 0.999))
 
     fixed_noise = torch.randn(64, nz, device=device)
 
