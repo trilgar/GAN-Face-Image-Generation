@@ -18,26 +18,24 @@ lr_d = 2e-3
 beta1 = 0.5
 PRINT_EVERY_EPOCH = 1
 
-image_size = (218, 178)  # (висота, ширина)
-nc = 3  # кількість каналів (RGB)
 nz = 100  # розмір латентного вектора
-ngf = 64  # базова кількість фільтрів у генераторі
-ndf = 64  # базова кількість фільтрів у дискримінаторі
+d_conv_dim = 64
+g_conv_dim = 128
 
 data_path = r"C:\Users\zarit\.cache\kagglehub\datasets\jessicali9530\celeba-dataset\versions\2\img_align_celeba\img_align_celeba"
 
 if __name__ == "__main__":
     transform = transforms.Compose([
-        transforms.Resize(image_size),
-        transforms.ToTensor(),
-        transforms.Normalize([0.5] * 3, [0.5] * 3)
+        transforms.Resize(32),
+        transforms.CenterCrop(32),
+        transforms.ToTensor()
     ])
 
     # Пристрій
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Device: {device}")
 
-    dataset = CelebADataset(root_dir=data_path, transform=transform, max_images=10000)
+    dataset = CelebADataset(root_dir=data_path, transform=transform)
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True,
                             pin_memory_device="cuda", prefetch_factor=4, persistent_workers=True)
 
@@ -51,13 +49,13 @@ if __name__ == "__main__":
             nn.init.constant_(m.bias.data, 0)
 
 
-    generator = Generator(nz, ngf, nc, image_size).to(device)
+    generator = Generator(nz, conv_dim=g_conv_dim).to(device)
     generator.apply(weights_init)
 
-    discriminator = Discriminator(nc, ndf).to(device)
+    discriminator = Discriminator(conv_dim=d_conv_dim).to(device)
     discriminator.apply(weights_init)
 
-    criterion = nn.BCELoss()
+    criterion = nn.BCEWithLogitsLoss()
     optimizerD = optim.Adam(discriminator.parameters(), lr=lr_d, betas=(beta1, 0.999))
     optimizerG = optim.Adam(generator.parameters(), lr=lr_g, betas=(beta1, 0.999))
 

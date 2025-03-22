@@ -4,6 +4,7 @@ import torch.nn as nn
 from PIL import Image
 from torch.utils.data import Dataset
 from tqdm import tqdm
+import torch.nn.functional as F
 
 
 # Датасет
@@ -45,66 +46,96 @@ class CelebADataset(Dataset):
             return image
 
 
+def deconv(in_channels, out_channels, kernel_size=4, stride=2, padding=1, batch_norm=True):
+    layers = []
+
+    # append transpose conv layer -- we are not using bias terms in conv layers
+    layers.append(nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride, padding))
+
+    # optional batch norm layer
+    if batch_norm:
+        layers.append(nn.BatchNorm2d(out_channels))
+
+    return nn.Sequential(*layers)
+
+
 # Генератор
 class Generator(nn.Module):
-    def __init__(self, nz, ngf, nc, image_size):
+
+    def __init__(self, z_size, conv_dim):
         super(Generator, self).__init__()
-        self.ngf = ngf
-        self.main = nn.Sequential(
-            nn.Linear(nz, ngf * 8 * 7 * 6),
-            nn.BatchNorm1d(ngf * 8 * 7 * 6),
-            nn.ReLU(True)
-        )
-        self.conv_blocks = nn.Sequential(
-            nn.ConvTranspose2d(ngf * 8, ngf * 4, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ngf*4, 14, 12)
-            nn.BatchNorm2d(ngf * 4),
-            nn.ReLU(True),
+        self.conv_dim = conv_dim
 
-            nn.ConvTranspose2d(ngf * 4, ngf * 2, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ngf*2, 28, 24)
-            nn.BatchNorm2d(ngf * 2),
-            nn.ReLU(True),
+        self.fc = nn.Linear(z_size, conv_dim * 4 * 4 * 4)
+        # complete init function
 
-            nn.ConvTranspose2d(ngf * 2, ngf, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ngf, 56, 48)
-            nn.BatchNorm2d(ngf),
-            nn.ReLU(True),
+        self.de_conv1 = deconv(conv_dim * 4, conv_dim * 2)
+        self.de_conv2 = deconv(conv_dim * 2, conv_dim)
+        self.de_conv3 = deconv(conv_dim, 3, 4, batch_norm=False)
 
-            nn.ConvTranspose2d(ngf, 32, kernel_size=4, stride=2, padding=1, bias=False),  # -> (32, 112, 96)
-            nn.BatchNorm2d(32),
-            nn.ReLU(True),
+        self.dropout = nn.Dropout(0.3)
 
-            nn.ConvTranspose2d(32, nc, kernel_size=4, stride=2, padding=1, bias=False),  # -> (nc, 224, 192)
-            nn.Tanh()  # [-1, 1]
-        )
-        # Адаптуємо фінальний розмір до (218, 178)
-        self.adapt = nn.AdaptiveAvgPool2d(image_size)
+    def forward(self, x):
+        """
+        Forward propagation of the neural network
+        :param x: The input to the neural network
+        :return: A 32x32x3 Tensor image as output
+        """
+        # define feedforward behavior
+        x = self.fc(x)
+        x = self.dropout(x)
 
-    def forward(self, input):
-        x = self.main(input)  # (batch_size, ngf*8*7*6)
-        x = x.view(-1, self.ngf * 8, 7, 6)
-        x = self.conv_blocks(x)  # (batch_size, nc, 224, 192)
-        x = self.adapt(x)  # (batch_size, nc, 218, 178)
+        x = x.view(-1, self.conv_dim * 4, 4, 4)
+
+        x = F.relu(self.de_conv1(x))
+        x = F.relu(self.de_conv2(x))
+        x = self.de_conv3(x)
+        x = F.tanh(x)
+
         return x
 
 
+def conv(in_channels, out_channels, kernel_size=4, stride=2, padding=1, batch_norm=True):
+    layers = []
+    conv_layer = nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                           kernel_size=kernel_size, stride=stride, padding=padding)
+    # appending convolutional layer
+    layers.append(conv_layer)
+    # appending batch norm layer
+    if batch_norm:
+        layers.append(nn.BatchNorm2d(out_channels))
+
+    return nn.Sequential(*layers)
+
+
 class Discriminator(nn.Module):
-    def __init__(self, nc, ndf):
+
+    def __init__(self, conv_dim):
         super(Discriminator, self).__init__()
-        self.conv = nn.Sequential(
-            # Перший згортковий блок: зменшує розміри зображення
-            nn.Conv2d(nc, ndf, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ndf, 109, 89)
-            nn.LeakyReLU(0.05, inplace=True),
 
-            # Другий згортковий блок: додаткове зменшення розмірів
-            nn.Conv2d(ndf, ndf, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ndf, 54, 44)
-            nn.LeakyReLU(0.05, inplace=True)
-        )
-        # Фінальний шар: ядро охоплює всю просторову розмірність (54, 44)
-        self.final = nn.Sequential(
-            nn.Conv2d(ndf, 1, kernel_size=(54, 44), stride=1, padding=0, bias=False),
-            nn.Sigmoid()
-        )
+        # complete init function
+        self.conv_dim = conv_dim
 
-    def forward(self, input):
-        x = self.conv(input)  # x має форму: (batch_size, ndf, 54, 44)
-        output = self.final(x)  # фінальна згортка зводить просторовий розмір до 1×1
-        return output.view(input.size(0))  # повертаємо тензор розміру (batch_size,)
+        self.conv1 = conv(3, conv_dim, batch_norm=False)
+        self.conv2 = conv(conv_dim, conv_dim * 2)
+        self.conv3 = conv(conv_dim * 2, conv_dim * 4)
+        self.conv4 = conv(conv_dim * 4, conv_dim * 8)
+        self.fc = nn.Linear(conv_dim * 4 * 4 * 2, 1)
+
+    def forward(self, x):
+        """
+        Forward propagation of the neural network
+        :param x: The input to the neural network
+        :return: Discriminator logits; the output of the neural network
+        """
+        # define feedforward behavior
+        x = F.leaky_relu(self.conv1(x), 0.2)
+        x = F.leaky_relu(self.conv2(x), 0.2)
+        x = F.leaky_relu(self.conv3(x), 0.2)
+        x = F.leaky_relu(self.conv4(x), 0.2)
+
+        x = x.view(-1, self.conv_dim * 4 * 2 * 4)
+
+        x = self.fc(x)
+
+        return x.squeeze()
