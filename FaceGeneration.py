@@ -13,8 +13,8 @@ from utils import CelebADataset, Generator, Discriminator
 # Параметри
 batch_size = 128
 num_epochs = 20
-lr_g = 1e-3
-lr_d = 1e-3
+lr_g = 2e-3
+lr_d = 2e-3
 beta1 = 0.5
 PRINT_EVERY_EPOCH = 1
 
@@ -46,9 +46,8 @@ if __name__ == "__main__":
     def weights_init(m):
         classname = m.__class__.__name__
         if classname.find('Conv') != -1:
-            nn.init.normal_(m.weight.data, 0.0, 0.02)
+            nn.init.normal_(m.weight.data, 0.0, 0.2)
         elif classname.find('BatchNorm') != -1:
-            nn.init.normal_(m.weight.data, 1.0, 0.02)
             nn.init.constant_(m.bias.data, 0)
 
 

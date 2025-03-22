@@ -90,17 +90,21 @@ class Discriminator(nn.Module):
     def __init__(self, nc, ndf):
         super(Discriminator, self).__init__()
         self.conv = nn.Sequential(
-            # Перший (і єдиний) згортковий блок: зменшує розміри зображення
+            # Перший згортковий блок: зменшує розміри зображення
             nn.Conv2d(nc, ndf, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ndf, 109, 89)
+            nn.LeakyReLU(0.05, inplace=True),
+
+            # Другий згортковий блок: додаткове зменшення розмірів
+            nn.Conv2d(ndf, ndf, kernel_size=4, stride=2, padding=1, bias=False),  # -> (ndf, 54, 44)
             nn.LeakyReLU(0.05, inplace=True)
         )
-        # Фінальний шар: ядро охоплює повну просторову розмірність після першого шару (109,89)
+        # Фінальний шар: ядро охоплює всю просторову розмірність (54, 44)
         self.final = nn.Sequential(
-            nn.Conv2d(ndf, 1, kernel_size=(109, 89), stride=1, padding=0, bias=False),
+            nn.Conv2d(ndf, 1, kernel_size=(54, 44), stride=1, padding=0, bias=False),
             nn.Sigmoid()
         )
 
     def forward(self, input):
-        x = self.conv(input)  # x має форму: (batch_size, ndf, 109, 89)
-        output = self.final(x)  # фінальна згортка зводить просторовий розмір до 1x1
+        x = self.conv(input)  # x має форму: (batch_size, ndf, 54, 44)
+        output = self.final(x)  # фінальна згортка зводить просторовий розмір до 1×1
         return output.view(input.size(0))  # повертаємо тензор розміру (batch_size,)
