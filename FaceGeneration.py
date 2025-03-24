@@ -32,12 +32,11 @@ if __name__ == "__main__":
     ])
 
     # Пристрій
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.mps.is_available() else "cpu")
     print(f"Device: {device}")
 
     dataset = CelebADataset(root_dir=data_path, transform=transform)
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True,
-                            pin_memory_device="cuda", prefetch_factor=4, persistent_workers=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True, prefetch_factor=4, persistent_workers=True)
 
 
     # Ініціалізація ваг
