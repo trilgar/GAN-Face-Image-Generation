@@ -22,7 +22,7 @@ nz = 100  # розмір латентного вектора
 d_conv_dim = 64
 g_conv_dim = 128
 
-data_path = r"C:\Users\zarit\.cache\kagglehub\datasets\jessicali9530\celeba-dataset\versions\2\img_align_celeba\img_align_celeba"
+data_path = r"/Users/aleksejzarickij/.cache/kagglehub/datasets/jessicali9530/celeba-dataset/versions/2/img_align_celeba/img_align_celeba"
 
 if __name__ == "__main__":
     transform = transforms.Compose([

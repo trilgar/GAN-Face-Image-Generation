@@ -139,3 +139,29 @@ class Discriminator(nn.Module):
         x = self.fc(x)
 
         return x.squeeze()
+
+
+class Critic(nn.Module):
+
+    def __init__(self, conv_dim):
+        super(Critic, self).__init__()
+
+        self.conv_dim = conv_dim
+
+        self.conv1 = conv(3, conv_dim, batch_norm=False)
+        self.conv2 = conv(conv_dim, conv_dim * 2, batch_norm=False)
+        self.conv3 = conv(conv_dim * 2, conv_dim * 4, batch_norm=False)
+        self.conv4 = conv(conv_dim * 4, conv_dim * 8, batch_norm=False)
+
+        self.fc = nn.Linear(conv_dim * 8 * 2 * 2, 1)
+
+    def forward(self, x):
+        x = F.leaky_relu(self.conv1(x), 0.2)
+        x = F.leaky_relu(self.conv2(x), 0.2)
+        x = F.leaky_relu(self.conv3(x), 0.2)
+        x = F.leaky_relu(self.conv4(x), 0.2)
+
+        x = x.view(x.size(0), -1)
+        x = self.fc(x)
+
+        return x.squeeze()
